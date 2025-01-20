@@ -1,1 +1,1 @@
-# labelstudio-tests
+# label-studio-tests
