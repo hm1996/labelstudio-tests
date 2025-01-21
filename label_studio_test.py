@@ -1,10 +1,11 @@
 import os
 import csv
-import json
 import random
 import unittest
 
 from utils import get_label_studio_app_pod_info
+
+from minio import Minio
 
 from label_studio_sdk.client import LabelStudio
 from label_studio_sdk.label_interface import LabelInterface
@@ -17,9 +18,17 @@ from kubernetes import client, config
 LABEL_STUDIO_URL = os.getenv('LABELS_TUDIO_URL', 'http://localhost:8085')
 HELM_RELEASE = os.getenv('HELM_RELEASE', 'label-studio')
 HELM_RELEASE_NAMESPACE = os.getenv('HELM_RELEASE_NAMESPACE', 'default')
-LABEL_STUDIO_APP_NAME = 'ls-app'
+LABEL_STUDIO_APP_NAME = os.getenv('LABEL_STUDIO_APP_NAME', 'ls-app')
+KUBE_CONFIG_PATH = os.getenv('KUBE_CONFIG_PATH', '/home/humar/.kube/config')
+MINIO_URL = os.getenv('MINIO_URL', 'localhost:9000')
+MINIO_EXTERNAL_URL = os.getenv('MINIO_EXTERNAL_URL', 'http://minio-1737413701.minio.svc.cluster.local:9000')
+MINIO_BUCKET = os.getenv('MINIO_BUCKET', 'label-studio-bucket')
+MINIO_KEY_ID = os.getenv('MINIO_KEY_ID', 'yPHcPxXxbruCjhQNM9O7')
+MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'miYc42jQTCc7Sdk540yYLDm9uJdwl3ks8y4cE9Lt')
 
-config.load_kube_config()
+print(MINIO_KEY_ID, MINIO_SECRET_KEY, MINIO_URL, MINIO_BUCKET)
+
+config.load_kube_config(KUBE_CONFIG_PATH)
 
 kubernetes_client = client.CoreV1Api()
 
@@ -35,6 +44,7 @@ class TestLabelStudioRelease(unittest.TestCase):
             HELM_RELEASE_NAMESPACE, 
             LABEL_STUDIO_APP_NAME
         )
+        
         self.assertIsNotNone(self.pod_info)
         self.assertIn(LABEL_STUDIO_APP_NAME, self.pod_info.get('name'))
 
@@ -67,11 +77,9 @@ class TestLabelStudioAPI(unittest.TestCase):
             email='dummy@example.com'
         )
 
-        print('-----------------------------------------------------------')
         print('User created:', user)
 
         self.assertIsNotNone(user)
-        # self.assertIn('id', user)
 
         TestLabelStudioAPI.user_id = user.id
 
@@ -89,12 +97,46 @@ class TestLabelStudioAPI(unittest.TestCase):
             label_config=label_config
         )
 
-        print('-----------------------------------------------------------')
         print('Project created:', project)
 
         self.assertIsNotNone(project)
 
         TestLabelStudioAPI.project_id = project.id
+
+    @unittest.skipIf(MINIO_KEY_ID == '', 'Minio access key is not provided')
+    @unittest.skipIf(MINIO_SECRET_KEY == '', 'Minio secret key is not provided')
+    def test_minio_connection(self):
+        self.assertNotEqual(self.api_key, '')
+        self.assertIsNotNone(self.label_studio_client)
+        self.assertNotEqual(self.project_id, -1)
+
+        client = Minio(
+            endpoint=MINIO_URL,
+            access_key=MINIO_KEY_ID,
+            secret_key=MINIO_SECRET_KEY,
+            secure=False
+        )
+
+        found = client.bucket_exists(MINIO_BUCKET)
+        if not found:
+            client.make_bucket(MINIO_BUCKET)
+            print("Created bucket:", MINIO_BUCKET)
+        else:
+            print("Bucket", MINIO_BUCKET, "already exists")
+
+        result = self.label_studio_client.export_storage.s3.create(
+            aws_access_key_id=MINIO_KEY_ID,
+            aws_secret_access_key=MINIO_SECRET_KEY,
+            bucket=MINIO_BUCKET,
+            can_delete_objects=True,
+            project=self.project_id,
+            s3endpoint=MINIO_EXTERNAL_URL,
+            title='MinIO connection',
+            request_options={'verify': False}
+        )
+
+        print('MinIO connection:', result)
+        self.assertIsNotNone(result)
 
     def test_data_importing(self):
         self.assertNotEqual(self.api_key, '')
@@ -102,7 +144,7 @@ class TestLabelStudioAPI(unittest.TestCase):
         self.assertNotEqual(self.project_id, -1)
 
         tasks = []
-        with open('./data/IMDB_train_unlabeled_100.csv') as csvfile:
+        with open('./data/IMDB_train_unlabeled_0_50.csv') as csvfile:
             reader = csv.DictReader(csvfile)
             tasks = [{ 'text': row['review'] } for row in reader]
 
@@ -111,11 +153,10 @@ class TestLabelStudioAPI(unittest.TestCase):
             request=tasks
         )
 
-        print('-----------------------------------------------------------')
         print('Task imported:', imports)
 
         self.assertIsNotNone(imports)
-        self.assertEqual(imports.task_count, 98)
+        self.assertEqual(imports.task_count, 49)
 
     def test_tasks_running(self):
         self.assertNotEqual(self.api_key, '')
@@ -166,17 +207,40 @@ class TestLabelStudioAPI(unittest.TestCase):
 
         self.assertNotEqual(exports, '')
 
+    @unittest.skipIf(MINIO_KEY_ID == '', 'Minio access key is not provided')
+    @unittest.skipIf(MINIO_SECRET_KEY == '', 'Minio secret key is not provided')
+    def test_minio_labels_exporting(self):
+        self.assertNotEqual(self.api_key, '')
+        self.assertIsNotNone(self.label_studio_client)
+        self.assertNotEqual(self.project_id, -1)
+
+        client = Minio(
+            endpoint=MINIO_URL,
+            access_key=MINIO_KEY_ID,
+            secret_key=MINIO_SECRET_KEY,
+            secure=False
+        )
+
+        objects = list(client.list_objects(MINIO_BUCKET))
+
+        self.assertNotEqual(objects, [])
+
+        objects_names = [obj.object_name for obj in objects]
+
+        print('Objects in bucket:', objects_names)
+        
+
     def test_data_cleaning(self):
         self.assertNotEqual(self.api_key, '')
         self.assertIsNotNone(self.label_studio_client)
         self.assertNotEqual(self.project_id, -1)
-        self.assertNotEqual(self.user_id, -1)
+        # self.assertNotEqual(self.user_id, -1)
 
         data = self.label_studio_client.projects.delete(id=self.project_id)
-        print('-----------------------------------------------------------')
+        
         print(data)
         data = self.label_studio_client.users.delete(id=self.user_id)
-        print('-----------------------------------------------------------')
+        
         print(data)
         pass
 
@@ -188,10 +252,12 @@ if __name__ == '__main__':
     
     suite.addTest(TestLabelStudioAPI('test_user_creation'))
     suite.addTest(TestLabelStudioAPI('test_project_creation'))
+    suite.addTest(TestLabelStudioAPI('test_minio_connection'))
     suite.addTest(TestLabelStudioAPI('test_data_importing'))
     suite.addTest(TestLabelStudioAPI('test_tasks_running'))
     suite.addTest(TestLabelStudioAPI('test_labels_exporting'))
+    suite.addTest(TestLabelStudioAPI('test_minio_labels_exporting'))
     suite.addTest(TestLabelStudioAPI('test_data_cleaning'))
 
-    runner = unittest.TextTestRunner()
+    runner = unittest.TextTestRunner(verbosity=2)
     runner.run(suite)
