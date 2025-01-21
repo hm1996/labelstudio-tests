@@ -234,7 +234,7 @@ class TestLabelStudioAPI(unittest.TestCase):
         self.assertNotEqual(self.api_key, '')
         self.assertIsNotNone(self.label_studio_client)
         self.assertNotEqual(self.project_id, -1)
-        # self.assertNotEqual(self.user_id, -1)
+        self.assertNotEqual(self.user_id, -1)
 
         data = self.label_studio_client.projects.delete(id=self.project_id)
         
@@ -242,7 +242,17 @@ class TestLabelStudioAPI(unittest.TestCase):
         data = self.label_studio_client.users.delete(id=self.user_id)
         
         print(data)
-        pass
+
+        data = self.label_studio_client.users.list()
+
+        print(data)
+        data = self.label_studio_client.users.whoami()
+
+        self.assertIsNotNone(data)
+
+        result = self.label_studio_client.users.delete(id=data.id)
+
+        print(result)
 
 if __name__ == '__main__':
     suite = unittest.TestSuite()
