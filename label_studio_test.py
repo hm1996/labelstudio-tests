@@ -37,17 +37,19 @@ label_studio_web = Label_studio_web()
 class TestLabelStudioRelease(unittest.TestCase):
     pod_info = {}
 
+    @unittest.skipIf(KUBE_CONFIG_PATH == '', 'Kube config is not provided')
     def test_label_studio_pod_running(self):
         self.pod_info = get_label_studio_app_pod_info(
             kubernetes_client, 
             HELM_RELEASE, 
-            HELM_RELEASE_NAMESPACE, 
+            HELM_RELEASE_NAMESPACE,
             LABEL_STUDIO_APP_NAME
         )
         
         self.assertIsNotNone(self.pod_info)
         self.assertIn(LABEL_STUDIO_APP_NAME, self.pod_info.get('name'))
 
+    @unittest.skipIf(KUBE_CONFIG_PATH == '', 'Kube config is not provided')
     def test_label_studio_open_ports(self):
         pass
 
