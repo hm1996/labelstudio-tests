@@ -15,24 +15,36 @@ from label_studio_web import Label_studio_web
 
 from kubernetes import client, config
 
-LABEL_STUDIO_URL = os.getenv('LABELS_TUDIO_URL', 'http://localhost:8085')
+LABEL_STUDIO_URL = os.getenv('LABEL_STUDIO_URL', 'http://localhost:8085')
 HELM_RELEASE = os.getenv('HELM_RELEASE', 'label-studio')
 HELM_RELEASE_NAMESPACE = os.getenv('HELM_RELEASE_NAMESPACE', 'default')
 LABEL_STUDIO_APP_NAME = os.getenv('LABEL_STUDIO_APP_NAME', 'ls-app')
-KUBE_CONFIG_PATH = os.getenv('KUBE_CONFIG_PATH', '/home/humar/.kube/config')
+KUBE_CONFIG_PATH = os.getenv('KUBE_CONFIG_PATH', '')
 MINIO_URL = os.getenv('MINIO_URL', 'localhost:9000')
 MINIO_EXTERNAL_URL = os.getenv('MINIO_EXTERNAL_URL', 'http://minio-1737413701.minio.svc.cluster.local:9000')
 MINIO_BUCKET = os.getenv('MINIO_BUCKET', 'label-studio-bucket')
 MINIO_KEY_ID = os.getenv('MINIO_KEY_ID', 'yPHcPxXxbruCjhQNM9O7')
 MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'miYc42jQTCc7Sdk540yYLDm9uJdwl3ks8y4cE9Lt')
 
-print(MINIO_KEY_ID, MINIO_SECRET_KEY, MINIO_URL, MINIO_BUCKET)
+print({
+    "LABEL_STUDIO_URL": LABEL_STUDIO_URL,
+    "HELM_RELEASE": HELM_RELEASE,
+    "HELM_RELEASE_NAMESPACE": HELM_RELEASE_NAMESPACE,
+    "LABEL_STUDIO_APP_NAME": LABEL_STUDIO_APP_NAME,
+    "KUBE_CONFIG_PATH": KUBE_CONFIG_PATH,
+    "MINIO_URL": MINIO_URL,
+    "MINIO_EXTERNAL_URL": MINIO_EXTERNAL_URL,
+    "MINIO_BUCKET": MINIO_BUCKET,
+    "MINIO_KEY_ID": MINIO_KEY_ID,
+    "MINIO_SECRET_KEY": MINIO_SECRET_KEY
+})
 
-config.load_kube_config(KUBE_CONFIG_PATH)
+kubernetes_client = None
+if KUBE_CONFIG_PATH != '':
+    config.load_kube_config(KUBE_CONFIG_PATH)
+    kubernetes_client = client.CoreV1Api()
 
-kubernetes_client = client.CoreV1Api()
-
-label_studio_web = Label_studio_web()
+label_studio_web = Label_studio_web(url=LABEL_STUDIO_URL)
 
 class TestLabelStudioRelease(unittest.TestCase):
     pod_info = {}
@@ -63,6 +75,7 @@ class TestLabelStudioAPI(unittest.TestCase):
         try:
             TestLabelStudioAPI.api_key = label_studio_web.get_api_token()
         except Exception as e:
+            print('Error:', e)
             pass
         
         self.assertNotEqual(self.api_key, '')

@@ -1,4 +1,5 @@
 beautifulsoup4==4.12.3
 kubernetes==31.0.0
 label_studio_sdk==1.0.8
+minio==7.2.15
 Requests==2.32.3

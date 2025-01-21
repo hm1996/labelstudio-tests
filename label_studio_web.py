@@ -17,8 +17,8 @@ class Label_studio_web:
     }
 
     def __init__(self, url: str = '', headers: dict = {}):
-        self.url = self.url or url
-        self.headers = self.headers or headers
+        self.url = url or self.url
+        self.headers = headers or self.headers
         self.session = requests.Session()
 
     def get_csrf_token(self) -> str:
@@ -53,7 +53,7 @@ class Label_studio_web:
         )
         
         if signup_response.status_code != 200:
-            raise Exception('Couldn\'t create the user!')
+            raise Exception('Couldn\'t create the user!', signup_response, signup_response.text)
 
         self.user['email'] = data.get('email')
         self.user['password'] = data.get('password')
@@ -77,7 +77,7 @@ class Label_studio_web:
         )
     
         if signin_response.status_code != 200:
-            raise Exception('Couldn\'t create the user!')
+            raise Exception('Couldn\'t create the user!', signin_response, signin_response.text)
         
         return True
         
@@ -95,7 +95,7 @@ class Label_studio_web:
         api_token = soup.find('input', {'id': 'access_token'})['value']
 
         if not api_token:
-            raise Exception('API token not found on the page!')
+            raise Exception('API token not found on the page!', account_response, account_response.text)
         
         return api_token
 
